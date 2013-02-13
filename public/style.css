@@ -1,9 +1,13 @@
 body {
     background:#000;
-    font: normal 12px/20px 'Georgia', serif;
+    font: normal 12px/20px 'Helvetica', sans-serif;
     color: #eee;
     padding: 0;
-    margin: 0 auto;
+    margin: 0;
+}
+
+* {
+    box-sizing:border-box;
 }
 
 h1 {
@@ -20,6 +24,8 @@ h1 {
 
 #map, #c, #o {
     position: absolute;
+    top:0;
+    left:0;
     width: 100%;
     height: 100%;
 }
@@ -31,4 +37,28 @@ h1 {
 #overlay a {
     position: absolute;
     background: rgba(0, 0, 0, 0.2);
+}
+
+#info {
+    position:fixed;
+    background:#11140b;
+    border-top:1px solid #353636;
+    bottom:0;
+    left:0;
+    right:0;
+}
+
+a {
+    color:#CCE9FF;
+}
+
+h3 {
+    padding:40px 40px 0px 40px;
+    margin:0;
+    font: normal 28px/30px 'Helvetica', sans-serif;
+}
+
+p {
+    padding:0px 40px 40px 40px;
+    font: normal 18px/30px 'Helvetica', sans-serif;
 }

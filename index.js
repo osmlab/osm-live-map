@@ -31,7 +31,6 @@ saxStream.on("opentag", function(node) {
 });
 
 saxStream.on("end", function(node) {
-    console.error("got change", e);
     change_id++;
 });
 
