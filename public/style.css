@@ -1,0 +1,34 @@
+body {
+    background:#000;
+    font: normal 12px/20px 'Georgia', serif;
+    color: #eee;
+    padding: 0;
+    margin: 0 auto;
+}
+
+h1 {
+    margin: 0;
+    padding:20px;
+    font-weight: normal;
+}
+
+#map {
+    background-image: url(bm.jpg);
+    background-repeat: no-repeat;
+    background-size: 100%;
+}
+
+#map, #c, #o {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+#overlay {
+    position: relative;
+}
+
+#overlay a {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.2);
+}
