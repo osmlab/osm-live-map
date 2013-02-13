@@ -34,9 +34,18 @@ h1 {
     position: relative;
 }
 
-#overlay a {
+#overlay span {
     position: absolute;
     background: rgba(0, 0, 0, 0.2);
+    -webkit-transition: -webkit-transform 500ms linear;
+}
+
+#overlay span a {
+    text-decoration:none;
+}
+
+#overlay span a:hover {
+    text-decoration:underline;
 }
 
 #info {
@@ -50,6 +59,13 @@ h1 {
 
 a {
     color:#CCE9FF;
+}
+
+a.edit-link {
+    margin-right:10px;
+    font-size:9px;
+    border: 1px solid #CCE9FF;
+    padding:0 2px;
 }
 
 h3 {

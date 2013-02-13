@@ -33,13 +33,19 @@
 
     var texts = [];
     for (var i = 0; i < 5; i++) {
-        texts.push(overlay.appendChild(document.createElement('a')));
+        texts.push(overlay.appendChild(document.createElement('span')));
+        texts[i].appendChild(document.createElement('a'));
+        texts[i].childNodes[0].className = 'edit-link';
+        texts[i].appendChild(document.createElement('a'));
     }
 
     var texti = 0;
-    function setText(x, px) {
-        texts[texti].innerHTML = x;
+    function setText(x, id, px) {
         texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
+        texts[texti].childNodes[0].innerHTML = '+';
+        texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
+        texts[texti].childNodes[1].innerHTML = x;
+        texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + x;
         texti = (++texti > 4) ? 0 : texti;
     }
 
@@ -80,15 +86,14 @@
         var i = 0;
         var persec = (60 * 1000) / points.length;
         function d() {
-            var px = scale(points[i].pt);
             ctx.globalAlpha = 1;
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(px[0], px[1], 1, 1);
-            ctx.globalAlpha = 0.06;
+            var tl = scale(points[i].box[0]);
+            var br = scale(points[i].box[1]);
             ctx.fillStyle = '#CCE9FF';
-            ctx.fillRect(px[0] - 3, px[1], 6, 1);
-            ctx.fillRect(px[0], px[1] - 3, 1, 6);
-            setText(points[i].user, px);
+            ctx.fillRect(tl[0], tl[1],
+                (br[0] - tl[0]) || 3,
+                (br[1] - tl[1]) || 3);
+            setText(points[i].user, points[i].id, tl);
             if (++i < points.length) window.setTimeout(d, persec);
             setEdits(edits_recorded++);
         }
