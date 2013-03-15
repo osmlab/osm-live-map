@@ -1,81 +1,82 @@
-var request = require('request'),
-    zlib = require('zlib'),
-    sax = require('sax'),
-    express = require('express'),
-    _ = require('lodash'),
-    pad = require('pad');
+(function() {
+    var autoscale = require('autoscale-canvas'),
+        osmStream = require('osm-stream');
 
-var planetBase = 'http://planet.openstreetmap.org/';
-var changeBase = planetBase + 'replication/changesets/';
-var stateUrl = changeBase + 'state.yaml';
-var saxStream = sax.createStream(true);
+    var c = document.getElementById('c'),
+        overlay = document.getElementById('overlay'),
+        edits = document.getElementById('edits');
+    var edits_recorded = 0;
+    var w, h;
 
-var changes = [];
-var change_id = 0;
-
-saxStream.on("error", function(e) {
-    console.error("error!", e);
-    this._parser.error = null;
-    this._parser.resume();
-});
-
-// quantize to one decimal place
-function q(x) { return Math.round(x * 100) / 100; }
-
-saxStream.on("opentag", function(node) {
-    if (node.name === 'changeset') {
-        if (node.attributes.open && node.attributes.open === 'true') {
-            changes.push({
-                id: node.attributes.id,
-                box: [[
-                    q(+node.attributes.min_lon),
-                    q(+node.attributes.min_lat)],
-                    [q(+node.attributes.max_lon),
-                    q(+node.attributes.max_lat)]],
-                user: node.attributes.user
-            });
-        }
+    function setSize() {
+        w = window.innerWidth;
+        h = w / 2;
+        c.width = w;
+        c.height = h;
+        c = autoscale(c);
+        ctx = c.getContext('2d');
     }
-});
 
-saxStream.on("end", function(node) {
-    change_id++;
-});
+    setSize();
 
-function getSequence(body) {
-    var match = body.match(/sequence\: (\d+)/);
-    if (match) return pad(9, match[1], '0');
-}
+    var id = '',
+        texts = [],
+        texti = 0;
 
-function getSeqUrl(seq) {
-    return changeBase + seq.slice(0, 3) +
-        '/' + seq.slice(3, 6) + '/' + seq.slice(6, 9) + '.osm.gz';
-}
+    for (var i = 0; i < 5; i++) {
+        texts.push(overlay.appendChild(document.createElement('span')));
+        texts[i].appendChild(document.createElement('a'));
+        texts[i].childNodes[0].className = 'edit-link';
+        texts[i].appendChild(document.createElement('a'));
+    }
 
-function pullState() {
-    request(stateUrl, function(err, res) {
-        if (err) return;
-        var seq = getSequence(res.body);
-        if (!seq) return;
-        changes = [];
-        request(getSeqUrl(seq))
-            .pipe(zlib.createGunzip())
-            .pipe(saxStream);
+    function setText(x, id, px) {
+        texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
+        texts[texti].childNodes[0].innerHTML = '+';
+        texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
+        texts[texti].childNodes[1].innerHTML = x;
+        texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + x;
+        texti = (++texti > 4) ? 0 : texti;
+    }
+
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = '#fff';
+
+    function scalex(x) {
+        return ~~((x + 180) * (w / 360));
+    }
+    function scaley(y) {
+        return ~~(h - ((y + 90) * (h / 180)));
+    }
+
+    function setEdits(e) {
+        edits.innerHTML = edits_recorded;
+    }
+
+    function drawPoint(point) {
+        ctx.fillStyle = '#CCE9FF';
+        ctx.fillRect(
+            scalex(point[0]),
+            scaley(point[1]), 2, 2);
+        // setText(points[i].user, points[i].id, tl);
+        setEdits(edits_recorded++);
+    }
+
+    function drawRect(bbox) {
+        ctx.fillStyle = '#CCE9FF';
+        ctx.fillRect(
+            scalex(bbox[0]),
+            scaley(bbox[1]),
+            scalex(bbox[2] - bbox[0]),
+            scaley(bbox[3] - bbox[1]));
+        // setText(points[i].user, points[i].id, tl);
+        setEdits(edits_recorded++);
+    }
+
+    osmStream.run(function(err, stream) {
+        stream.on('data', function(d) {
+            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            else if (d.neu.bbox) drawRect(p.neu.bbox);
+        });
     });
-}
-
-setInterval(pullState, 60 * 1000);
-pullState();
-
-var app = express();
-
-app.get('/changes', function(req, res) {
-    res.send({
-        id: change_id,
-        changes: changes
-    });
-});
-
-app.use(express['static'](__dirname + '/public'));
-
-app.listen(3000);
+})();

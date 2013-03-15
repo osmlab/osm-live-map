@@ -57,6 +57,13 @@ h1 {
     right:0;
 }
 
+.edits-overlay {
+    position:fixed;
+    top:20px;
+    right:20px;
+    color:#fff;
+}
+
 a {
     color:#CCE9FF;
 }
@@ -69,12 +76,12 @@ a.edit-link {
 }
 
 h3 {
-    padding:40px 40px 0px 40px;
+    padding:20px 20px 0px 20px;
     margin:0;
-    font: normal 28px/30px 'Helvetica', sans-serif;
+    font: normal 22px/30px 'Helvetica', sans-serif;
 }
 
 p {
-    padding:0px 40px 40px 40px;
+    padding:0px 20px 20px 20px;
     font: normal 18px/30px 'Helvetica', sans-serif;
 }

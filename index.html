@@ -2,24 +2,23 @@
 <html>
     <head>
         <title></title>
+        <link rel='stylesheet' type='text/css' href='reset.css' />
         <link rel='stylesheet' type='text/css' href='style.css' />
         <meta http-equiv='content-type' content='text/html; charset=utf-8' />
     </head>
     <body>
         <div id='map'></div>
         <canvas id='c'></canvas>
+        <div class='edits-overlay'><span id='edits'></span> edits recorded</div>
         <div id='o'><div id='overlay'></div></div>
         <div id='info'>
             <h3><a href='http://openstreetmap.org/'>OpenStreetMap</a>
-                is the world's collaborative map, edited
-                every minute by thousands of volunteers. Showing
-                <span id='edits'>0</span> edits.
-            </h3>
+                is the world's collaborative map.</h3>
             <p>The map is open source and open data, which means
             that it can be shared, printed, and used in many new ways.
             <a href='http://www.openstreetmap.org/'>Join OpenStreetMap</a>
             to help map the world. </p>
         </div>
-        <script src='osmping.js'></script>
+        <script src='bundle.js'></script>
     </body>
 </html>
