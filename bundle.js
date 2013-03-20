@@ -7,8 +7,13 @@
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
         edits = document.getElementById('edits');
+        namesdiv = document.getElementById('names');
     var edits_recorded = 0;
     var w, h;
+
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
 
     function setSize() {
         w = window.innerWidth;
@@ -52,10 +57,11 @@
     }
 
     function setEdits(e) {
-        edits.innerHTML = edits_recorded;
+        edits.innerHTML = numberWithCommas(edits_recorded);
     }
 
     function drawCircle(ctx, x, y, r) {
+        ctx.fillStyle = '#FFFFB6';
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2, true);
         ctx.closePath();
@@ -63,21 +69,19 @@
     }
 
     function drawPoint(point) {
-        ctx.fillStyle = '#CCE9FF';
-
         if (Math.random() > 0.95) {
             ctx.globalAlpha = 0.01;
             drawCircle(ctx,
                 scalex(point[0]),
                 scaley(point[1]), 6);
         }
-
+        ctx.fillStyle = '#CCE9FF';
         ctx.globalAlpha = 0.8;
         ctx.fillRect(
             scalex(point[0]),
-            scaley(point[1]), 1, 1);
+            scaley(point[1]), 2, 2);
         // setText(points[i].user, points[i].id, tl);
-        setEdits(edits_recorded++);
+        edits_recorded++;
     }
 
     function drawRect(bbox) {
@@ -88,11 +92,30 @@
             scalex(bbox[2] - bbox[0]),
             scaley(bbox[3] - bbox[1]));
         // setText(points[i].user, points[i].id, tl);
-        setEdits(edits_recorded++);
+        edits_recorded++;
+    }
+
+    var names = [];
+
+    function drawUI() {
+        setNames(names);
+        setEdits(edits_recorded);
+        setTimeout(drawUI, 50);
+    }
+
+    drawUI();
+
+    function setNames(names) {
+        namesdiv.innerHTML = names.join(', ');
+        var lim = 50;
+        while (names.length > lim) names.shift();
     }
 
     osmStream.runFn(function(err, points) {
         ration(points, 60 * 1000, function(d) {
+            if (names.indexOf(d.neu.user) == -1) {
+                names.push(d.neu.user);
+            }
             if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
@@ -103,6 +126,9 @@
         if (reachback-- === 0) controller.cancel();
         if (reachback === 3) return;
         ration(points, 60 * 1000, function(d) {
+            if (names.indexOf(d.neu.user) == -1) {
+                names.push(d.neu.user);
+            }
             if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });

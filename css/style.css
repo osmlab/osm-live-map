@@ -62,6 +62,18 @@ h1 {
     top:20px;
     right:20px;
     color:#fff;
+    text-align:right;
+    max-width:25%;
+}
+
+#edits {
+    font:bold 28px 'Helvetica Neue';
+}
+
+#names {
+    display:block;
+    opacity:0.5;
+    font-size:10px;
 }
 
 a {
