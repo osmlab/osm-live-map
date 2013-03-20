@@ -1,6 +1,7 @@
 ;(function(e,t,n,r){function i(r){if(!n[r]){if(!t[r]){if(e)return e(r);throw new Error("Cannot find module '"+r+"'")}var s=n[r]={exports:{}};t[r][0](function(e){var n=t[r][1][e];return i(n?n:e)},s,s.exports)}return n[r].exports}for(var s=0;s<r.length;s++)i(r[s]);return i})(typeof require!=="undefined"&&require,{1:[function(require,module,exports){
 (function() {
     var autoscale = require('autoscale-canvas'),
+        ration = require('ration'),
         osmStream = require('osm-stream');
 
     var c = document.getElementById('c'),
@@ -20,9 +21,10 @@
 
     setSize();
 
-    var id = '';
+    var id = '',
+        texts = [],
+        texti = 0;
 
-    var texts = [];
     for (var i = 0; i < 5; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
         texts[i].appendChild(document.createElement('a'));
@@ -30,7 +32,6 @@
         texts[i].appendChild(document.createElement('a'));
     }
 
-    var texti = 0;
     function setText(x, id, px) {
         texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
         texts[texti].childNodes[0].innerHTML = '+';
@@ -54,11 +55,27 @@
         edits.innerHTML = edits_recorded;
     }
 
+    function drawCircle(ctx, x, y, r) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+    }
+
     function drawPoint(point) {
         ctx.fillStyle = '#CCE9FF';
+
+        if (Math.random() > 0.95) {
+            ctx.globalAlpha = 0.01;
+            drawCircle(ctx,
+                scalex(point[0]),
+                scaley(point[1]), 6);
+        }
+
+        ctx.globalAlpha = 0.8;
         ctx.fillRect(
             scalex(point[0]),
-            scaley(point[1]), 2, 2);
+            scaley(point[1]), 1, 1);
         // setText(points[i].user, points[i].id, tl);
         setEdits(edits_recorded++);
     }
@@ -74,15 +91,38 @@
         setEdits(edits_recorded++);
     }
 
-    osmStream.run(function(err, stream) {
-        stream.on('data', function(d) {
+    osmStream.runFn(function(err, points) {
+        ration(points, 60 * 1000, function(d) {
             if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
     });
+
+    var reachback = 10;
+    var controller = osmStream.runFn(function(err, points) {
+        if (reachback-- === 0) controller.cancel();
+        if (reachback === 3) return;
+        ration(points, 60 * 1000, function(d) {
+            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            else if (d.neu.bbox) drawRect(p.neu.bbox);
+        });
+    }, 100, -1);
 })();
 
-},{"osm-stream":2,"autoscale-canvas":3}],3:[function(require,module,exports){
+},{"ration":2,"osm-stream":3,"autoscale-canvas":4}],2:[function(require,module,exports){
+function ration(list, duration, cb) {
+    if (!list.length) return;
+    var per = duration / (list.length - 1), i = 0;
+    function dole() {
+        cb(list[i++]);
+        if (i < list.length) setTimeout(dole, per);
+    }
+    dole();
+}
+
+if (typeof module !== 'undefined') module.exports = ration;
+
+},{}],4:[function(require,module,exports){
 
 /**
  * Retina-enable the given `canvas`.
@@ -104,7 +144,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');
@@ -115,7 +155,7 @@ var osmStream = (function osmMinutely() {
     // presets
     var baseUrl = 'http://overpass-api.de/',
         minuteStatePath = 'augmented_diffs/state.txt',
-        changePath = 'api/augmented_diff?id=229543&info=no&bbox=-253,-62,253,62';
+        changePath = 'api/augmented_diff?';
 
     function minuteStateUrl() {
         return baseUrl + minuteStatePath;
@@ -123,8 +163,7 @@ var osmStream = (function osmMinutely() {
 
     function changeUrl(id) {
         return baseUrl + changePath + qs.stringify({
-            id: id, info: 'no',
-            bbox: '-180,-90,180,90'
+            id: id, info: 'no', bbox: '-180,-90,180,90'
         });
     }
 
@@ -134,7 +173,7 @@ var osmStream = (function osmMinutely() {
             crossOrigin: true,
             type: 'text',
             success: function(res) {
-                cb(null, res.response);
+                cb(null, parseInt(res.response, 10));
             }
         });
     }
@@ -178,9 +217,11 @@ var osmStream = (function osmMinutely() {
         }
     }
 
-    function run(id, stream) {
+    function run(id, cb) {
         requestChangeset(id, function(err, xml) {
+            if (err) return cb([]);
             var actions = xml.getElementsByTagName('action'), a;
+            var items = [];
             for (var i = 0; i < actions.length; i++) {
                 var o = {};
                 a = actions[i];
@@ -192,38 +233,73 @@ var osmStream = (function osmMinutely() {
                     o.neu = parseNode(get(a, ['node', 'way']));
                 }
                 if (o.old || o.neu) {
-                    stream.write(o);
+                    items.push(o);
                 }
             }
+            cb(items);
         });
     }
 
     s.once = function(cb) {
-        requestState(function(err, resp) {
+        requestState(function(err, state) {
             var stream = through(function write(data) {
                 cb(null, data);
             });
-            run(resp, stream);
+            run(state, stream.write);
         });
     };
 
-    s.run = function(cb, duration) {
-        requestState(function(err, resp) {
-            var state = resp;
+    s.run = function(cb, duration, dir) {
+        dir = dir || 1;
+        duration = duration || 60 * 1000;
+        var cancel = false;
+        function setCancel() { cancel = true; }
+        requestState(function(err, state) {
             var stream = through(
                 function write(data) {
                     this.queue(data);
                 },
                 function end() {
-                    window.clearInterval(interval);
+                    cancel = true;
                     this.queue(null);
                 });
+            function write(items) {
+                for (var i = 0; i < items.length; i++) {
+                    stream.write(items[i]);
+                }
+            }
             cb(null, stream);
-            run(state++, stream);
-            var interval = setInterval(function() {
-                run(state++, stream);
-            }, duration || 60 * 1000);
+            function iterate() {
+                run(state, function(items) {
+                    write(items);
+                    state += dir;
+                    if (!cancel) setTimeout(iterate, duration);
+                });
+            }
+            iterate();
         });
+        return { cancel: setCancel };
+    };
+
+    s.runFn = function(cb, duration, dir) {
+        dir = dir || 1;
+        duration = duration || 60 * 1000;
+        function setCancel() { cancel = true; }
+        var cancel = false;
+        requestState(function(err, state) {
+            function write(items) {
+                cb(null, items);
+            }
+            function iterate() {
+                run(state, function(items) {
+                    write(items);
+                    state += dir;
+                    if (!cancel) setTimeout(iterate, duration);
+                });
+            }
+            iterate();
+        });
+        return { cancel: setCancel };
     };
 
     return s;
@@ -231,7 +307,7 @@ var osmStream = (function osmMinutely() {
 
 module.exports = osmStream;
 
-},{"reqwest":4,"through":5,"qs":6}],4:[function(require,module,exports){
+},{"reqwest":5,"through":6,"qs":7}],5:[function(require,module,exports){
 /*!
   * Reqwest! A general purpose XHR connection manager
   * (c) Dustin Diaz 2012
@@ -718,7 +794,7 @@ module.exports = osmStream;
   return reqwest
 });
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -772,7 +848,7 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 (function(process){var Stream = require('stream')
 
 // through
@@ -878,7 +954,7 @@ function through (write, end) {
 
 
 })(require("__browserify_process"))
-},{"stream":8,"__browserify_process":7}],6:[function(require,module,exports){
+},{"stream":9,"__browserify_process":8}],7:[function(require,module,exports){
 
 /**
  * Object#toString() ref for stringify().
@@ -1076,9 +1152,13 @@ function stringifyObject(obj, prefix) {
 
   for (var i = 0, len = keys.length; i < len; ++i) {
     key = keys[i];
-    ret.push(stringify(obj[key], prefix
-      ? prefix + '[' + encodeURIComponent(key) + ']'
-      : encodeURIComponent(key)));
+    if (null == obj[key]) {
+      ret.push(encodeURIComponent(key) + '=');
+    } else {
+      ret.push(stringify(obj[key], prefix
+        ? prefix + '[' + encodeURIComponent(key) + ']'
+        : encodeURIComponent(key)));
+    }
   }
 
   return ret.join('&');
@@ -1142,7 +1222,7 @@ function decode(str) {
   }
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var events = require('events');
 var util = require('util');
 
@@ -1263,7 +1343,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":9,"util":10}],9:[function(require,module,exports){
+},{"events":10,"util":11}],10:[function(require,module,exports){
 (function(process){if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -1449,7 +1529,7 @@ EventEmitter.prototype.listeners = function(type) {
 };
 
 })(require("__browserify_process"))
-},{"__browserify_process":7}],10:[function(require,module,exports){
+},{"__browserify_process":8}],11:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -1802,5 +1882,5 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":9}]},{},[1])
+},{"events":10}]},{},[1])
 ;

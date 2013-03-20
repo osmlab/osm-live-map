@@ -1,5 +1,6 @@
 (function() {
     var autoscale = require('autoscale-canvas'),
+        ration = require('ration'),
         osmStream = require('osm-stream');
 
     var c = document.getElementById('c'),
@@ -53,11 +54,27 @@
         edits.innerHTML = edits_recorded;
     }
 
+    function drawCircle(ctx, x, y, r) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+    }
+
     function drawPoint(point) {
         ctx.fillStyle = '#CCE9FF';
+
+        if (Math.random() > 0.95) {
+            ctx.globalAlpha = 0.01;
+            drawCircle(ctx,
+                scalex(point[0]),
+                scaley(point[1]), 6);
+        }
+
+        ctx.globalAlpha = 0.8;
         ctx.fillRect(
             scalex(point[0]),
-            scaley(point[1]), 2, 2);
+            scaley(point[1]), 1, 1);
         // setText(points[i].user, points[i].id, tl);
         setEdits(edits_recorded++);
     }
@@ -73,10 +90,20 @@
         setEdits(edits_recorded++);
     }
 
-    osmStream.run(function(err, stream) {
-        stream.on('data', function(d) {
+    osmStream.runFn(function(err, points) {
+        ration(points, 60 * 1000, function(d) {
             if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
     });
+
+    var reachback = 10;
+    var controller = osmStream.runFn(function(err, points) {
+        if (reachback-- === 0) controller.cancel();
+        if (reachback === 3) return;
+        ration(points, 60 * 1000, function(d) {
+            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            else if (d.neu.bbox) drawRect(p.neu.bbox);
+        });
+    }, 100, -1);
 })();
