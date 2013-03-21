@@ -2,18 +2,16 @@
 (function() {
     var autoscale = require('autoscale-canvas'),
         ration = require('ration'),
+        format = require('format-number')(),
         osmStream = require('osm-stream');
 
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
         edits = document.getElementById('edits');
         namesdiv = document.getElementById('names');
-    var edits_recorded = 0;
-    var w, h;
 
-    function numberWithCommas(x) {
-        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    }
+    var edits_recorded = 0,
+        w, h;
 
     function setSize() {
         w = window.innerWidth;
@@ -37,13 +35,17 @@
         texts[i].appendChild(document.createElement('a'));
     }
 
-    function setText(x, id, px) {
+    var seenT = {};
+
+    function setText(x, px) {
+        if (seenT[x]) return;
         texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
         texts[texti].childNodes[0].innerHTML = '+';
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
         texts[texti].childNodes[1].innerHTML = x;
         texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + x;
         texti = (++texti > 4) ? 0 : texti;
+        seenT[x] = true;
     }
 
     ctx.globalAlpha = 0.8;
@@ -57,7 +59,7 @@
     }
 
     function setEdits(e) {
-        edits.innerHTML = numberWithCommas(edits_recorded);
+        edits.innerHTML = format(edits_recorded);
     }
 
     function drawCircle(ctx, x, y, r) {
@@ -80,7 +82,6 @@
         ctx.fillRect(
             scalex(point[0]),
             scaley(point[1]), 2, 2);
-        // setText(points[i].user, points[i].id, tl);
         edits_recorded++;
     }
 
@@ -91,7 +92,6 @@
             scaley(bbox[1]),
             scalex(bbox[2] - bbox[0]),
             scaley(bbox[3] - bbox[1]));
-        // setText(points[i].user, points[i].id, tl);
         edits_recorded++;
     }
 
@@ -116,7 +116,13 @@
             if (names.indexOf(d.neu.user) == -1) {
                 names.push(d.neu.user);
             }
-            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            if (d.neu.lat) {
+                var ll = [d.neu.lon, d.neu.lat];
+                drawPoint(ll);
+                if (edits_recorded % 100 === 0) {
+                    setText(d.neu.user, [scalex(ll[0]), scaley(ll[1])]);
+                }
+            }
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
     });
@@ -135,7 +141,7 @@
     }, 100, -1);
 })();
 
-},{"ration":2,"osm-stream":3,"autoscale-canvas":4}],2:[function(require,module,exports){
+},{"ration":2,"format-number":3,"osm-stream":4,"autoscale-canvas":5}],2:[function(require,module,exports){
 function ration(list, duration, cb) {
     if (!list.length) return;
     var per = duration / (list.length - 1), i = 0;
@@ -148,7 +154,151 @@ function ration(list, duration, cb) {
 
 if (typeof module !== 'undefined') module.exports = ration;
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
+module.exports = formatter;
+
+function formatter(options) {
+  options = options || {};
+  options.negative = options.negative === 'R' ? 'R' : 'L';
+  options.negativeOut = options.negativeOut === false ? false : true;
+  options.prefix = options.prefix || '';
+  options.suffix = options.suffix || '';
+  options.separator = typeof options.separator === 'string' ? options.separator : ',';
+  options.decimal = options.decimal || '.';
+  
+  function format(number, includeUnits, separate) {
+    includeUnits = includeUnits === false ? false : true;
+    separate = separate === false ? false : true;
+    if (number || number === 0) {
+      number = '' + number;//convert number to string if it isn't already
+    } else {
+      return '';
+    }
+    var output = [];
+    var negative = number.charAt(0) === '-';
+    number = number.replace(/^\-/g, '');
+
+    if (!options.negativeOut && includeUnits) {
+      output.push(options.prefix);
+    }
+    if (negative && options.negative === 'L') {
+      output.push('-');
+    }
+    if (options.negativeOut && includeUnits) {
+      output.push(options.prefix);
+    }
+
+    number = number.split(options.decimal);
+    if (options.padLeft) number[0] = padLeft(number[0], options.padLeft);
+    if (separate) number[0] = addSeparators(number[0], options.separator);
+    output.push(number[0]);
+    if (options.padRight) number[1] = padRight(number[1], options.padRight);
+    if (options.truncate) number[1] = truncate(number[1], options.truncate);
+    if (number[1]) {
+      output.push(options.decimal);
+      output.push(number[1]);
+    }
+
+
+    if (options.negativeOut && includeUnits) {
+      output.push(options.suffix);
+    }
+    if (negative && options.negative === 'R') {
+      output.push('-');
+    }
+    if (!options.negativeOut && includeUnits) {
+      output.push(options.suffix);
+    }
+
+    return output.join('');
+  }
+
+  format.negative = options.negative;
+  format.negativeOut = options.negativeOut;
+  format.prefix = options.prefix;
+  format.suffix = options.suffix;
+  format.separate = options.separate;
+  format.separator = options.separator;
+  format.decimal = options.decimal;
+  format.padLeft = options.padLeft;
+  format.padRight = options.padRight;
+  format.truncate = options.truncate;
+
+  function unformat(number, allowedSeparators) {
+    allowedSeparators = allowedSeparators || [];
+    if (options.allowedSeparators) {
+      options.allowedSeparators.forEach(function (s) { allowedSeparators.push (s); });
+    }
+    allowedSeparators.push(options.separator);
+    number = number.replace(options.prefix, '');
+    number = number.replace(options.suffix, '');
+    var newNumber = number;
+    do {
+      number = newNumber;
+      for (var i = 0; i < allowedSeparators.length; i++) {
+        newNumber = newNumber.replace(allowedSeparators[i], '');
+      }
+    } while (newNumber != number);
+    return number;
+  }
+  format.unformat = unformat;
+
+  function validate(number, allowedSeparators) {
+    number = unformat(number, allowedSeparators);
+    number = number.split(options.decimal);
+    if (number.length > 2) {
+      return false;
+    } else if (options.truncate && number[1] && number[1].length > options.truncate) {
+      return false;
+    } else {
+      return /^\d*\.\d*$/.test(number);
+    }
+  }
+  return format;
+}
+
+//where x is already the integer part of the number
+function addSeparators(x, separator) {
+  x += '';
+  if (!separator) return x;
+  var rgx = /(\d+)(\d{3})/;
+  while (rgx.test(x)) {
+    x = x.replace(rgx, '$1' + separator + '$2');
+  }
+  return x;
+}
+
+function padLeft(x, padding) {
+  x = x + '';
+  var buf = [];
+  while (buf.length + x.length < padding) {
+    buf.push('0');
+  }
+  return buf.join('') + x;
+}
+function padRight(x, padding) {
+  if (x) {
+    x += '';
+  } else {
+    x = '';
+  }
+  var buf = [];
+  while (buf.length + x.length < padding) {
+    buf.push('0');
+  }
+  return x + buf.join('');
+}
+function truncate(x, length) {
+  if (x) {
+    x += '';
+  }
+  if (x && x.length > length) {
+    return x.substr(0, length);
+  } else {
+    return x;
+  }
+}
+},{}],5:[function(require,module,exports){
 
 /**
  * Retina-enable the given `canvas`.
@@ -170,7 +320,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');
@@ -333,7 +483,7 @@ var osmStream = (function osmMinutely() {
 
 module.exports = osmStream;
 
-},{"reqwest":5,"through":6,"qs":7}],5:[function(require,module,exports){
+},{"reqwest":6,"through":7,"qs":8}],6:[function(require,module,exports){
 /*!
   * Reqwest! A general purpose XHR connection manager
   * (c) Dustin Diaz 2012
@@ -820,7 +970,7 @@ module.exports = osmStream;
   return reqwest
 });
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -874,7 +1024,7 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 (function(process){var Stream = require('stream')
 
 // through
@@ -980,7 +1130,7 @@ function through (write, end) {
 
 
 })(require("__browserify_process"))
-},{"stream":9,"__browserify_process":8}],7:[function(require,module,exports){
+},{"stream":10,"__browserify_process":9}],8:[function(require,module,exports){
 
 /**
  * Object#toString() ref for stringify().
@@ -1248,7 +1398,7 @@ function decode(str) {
   }
 }
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 var events = require('events');
 var util = require('util');
 
@@ -1369,7 +1519,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":10,"util":11}],10:[function(require,module,exports){
+},{"events":11,"util":12}],11:[function(require,module,exports){
 (function(process){if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -1555,7 +1705,7 @@ EventEmitter.prototype.listeners = function(type) {
 };
 
 })(require("__browserify_process"))
-},{"__browserify_process":8}],11:[function(require,module,exports){
+},{"__browserify_process":9}],12:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -1908,5 +2058,5 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":10}]},{},[1])
+},{"events":11}]},{},[1])
 ;

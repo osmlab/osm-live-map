@@ -1,18 +1,16 @@
 (function() {
     var autoscale = require('autoscale-canvas'),
         ration = require('ration'),
+        format = require('format-number')(),
         osmStream = require('osm-stream');
 
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
         edits = document.getElementById('edits');
         namesdiv = document.getElementById('names');
-    var edits_recorded = 0;
-    var w, h;
 
-    function numberWithCommas(x) {
-        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    }
+    var edits_recorded = 0,
+        w, h;
 
     function setSize() {
         w = window.innerWidth;
@@ -36,13 +34,17 @@
         texts[i].appendChild(document.createElement('a'));
     }
 
-    function setText(x, id, px) {
+    var seenT = {};
+
+    function setText(x, px) {
+        if (seenT[x]) return;
         texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
         texts[texti].childNodes[0].innerHTML = '+';
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
         texts[texti].childNodes[1].innerHTML = x;
         texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + x;
         texti = (++texti > 4) ? 0 : texti;
+        seenT[x] = true;
     }
 
     ctx.globalAlpha = 0.8;
@@ -51,12 +53,13 @@
     function scalex(x) {
         return ~~((x + 180) * (w / 360));
     }
+
     function scaley(y) {
         return ~~(h - ((y + 90) * (h / 180)));
     }
 
     function setEdits(e) {
-        edits.innerHTML = numberWithCommas(edits_recorded);
+        edits.innerHTML = format(edits_recorded);
     }
 
     function drawCircle(ctx, x, y, r) {
@@ -79,7 +82,6 @@
         ctx.fillRect(
             scalex(point[0]),
             scaley(point[1]), 2, 2);
-        // setText(points[i].user, points[i].id, tl);
         edits_recorded++;
     }
 
@@ -90,7 +92,6 @@
             scaley(bbox[1]),
             scalex(bbox[2] - bbox[0]),
             scaley(bbox[3] - bbox[1]));
-        // setText(points[i].user, points[i].id, tl);
         edits_recorded++;
     }
 
@@ -115,7 +116,13 @@
             if (names.indexOf(d.neu.user) == -1) {
                 names.push(d.neu.user);
             }
-            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            if (d.neu.lat) {
+                var ll = [d.neu.lon, d.neu.lat];
+                drawPoint(ll);
+                if (edits_recorded % 100 === 0) {
+                    setText(d.neu.user, [scalex(ll[0]), scaley(ll[1])]);
+                }
+            }
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
     });

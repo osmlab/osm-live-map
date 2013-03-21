@@ -12,6 +12,7 @@
   "dependencies": {
     "autoscale-canvas": "0.0.3",
     "osm-stream": "0.0.3",
-    "ration": "0.0.0"
+    "ration": "0.0.0",
+    "format-number": "0.0.0"
   }
 }
