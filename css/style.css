@@ -27,7 +27,7 @@ h3 {
     background-size: 100%;
 }
 
-#map, #c, #o {
+#map, #c, #c-glow, #o {
     position: absolute;
     top:0;
     left:0;

@@ -3,30 +3,19 @@
     var autoscale = require('autoscale-canvas'),
         ration = require('ration'),
         format = require('format-number')(),
+        colorizeAlpha = require('canvas-colorize-alpha'),
         osmStream = require('osm-stream');
 
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
         edits = document.getElementById('edits');
-        namesdiv = document.getElementById('names');
-
-    var edits_recorded = 0,
-        w, h;
-
-    function setSize() {
-        w = window.innerWidth;
-        h = w / 2;
-        c.width = w;
-        c.height = h;
-        c = autoscale(c);
-        ctx = c.getContext('2d');
-    }
-
-    setSize();
-
-    var id = '',
+        namesdiv = document.getElementById('names'),
+        id = '',
         texts = [],
-        texti = 0;
+        texti = 0,
+        seenT = {},
+        names = [],
+        edits_recorded = 0;
 
     for (var i = 0; i < 5; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
@@ -35,10 +24,49 @@
         texts[i].appendChild(document.createElement('a'));
     }
 
-    var seenT = {};
+    var w = window.innerWidth,
+        h = w / 2;
+
+    c.width = w;
+    c.height = h;
+    c = autoscale(c);
+
+    ctx = c.getContext('2d');
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = '#fff';
+
+    drawUI();
+
+    var ptsize = 1;
+
+    function drawPoint(d) {
+        if (names.indexOf(d.neu.user) == -1) names.push(d.neu.user);
+        if (d.neu.lat) {
+            ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
+            setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
+            edits_recorded++;
+            if (edits_recorded % 600 === 0) {
+                doBlur(c, ctx);
+            }
+            if (edits_recorded % 1000 === 0) {
+                doColorize(c);
+            }
+        }
+    }
+
+    osmStream.runFn(function(err, points) {
+        ration(points, 60 * 1000, drawPoint);
+    });
+
+    var reachback = 10;
+    var controller = osmStream.runFn(function(err, points) {
+        if (reachback-- === 0) controller.cancel();
+        if (reachback === 3) return;
+        ration(points, 60 * 1000, drawPoint);
+    }, 100, -1);
 
     function setText(t, x, y) {
-        if (seenT[t]) return;
+        if (edits_recorded % 100 || seenT[t]) return;
         texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
         texts[texti].childNodes[0].innerHTML = '+';
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
@@ -48,63 +76,9 @@
         seenT[t] = true;
     }
 
-    ctx.globalAlpha = 0.8;
-    ctx.fillStyle = '#fff';
-
-    function scalex(x) {
-        return ~~((x + 180) * (w / 360));
-    }
-
-    function scaley(y) {
-        return ~~(h - ((y + 90) * (h / 180)));
-    }
-
-    function setEdits(e) {
-        edits.innerHTML = format(edits_recorded);
-    }
-
-    function drawCircle(ctx, x, y, r) {
-        ctx.fillStyle = '#FFFFB6';
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    function drawPoint(x, y) {
-        if (Math.random() > 0.95) {
-            ctx.globalAlpha = 0.01;
-            drawCircle(ctx,
-                scalex(x),
-                scaley(y), 6);
-        }
-        ctx.fillStyle = '#CCE9FF';
-        ctx.globalAlpha = 0.8;
-        ctx.fillRect(
-            scalex(x),
-            scaley(y), 2, 2);
-        edits_recorded++;
-    }
-
-    function drawRect(bbox) {
-        ctx.fillStyle = '#CCE9FF';
-        ctx.fillRect(
-            scalex(bbox[0]),
-            scaley(bbox[1]),
-            scalex(bbox[2] - bbox[0]),
-            scaley(bbox[3] - bbox[1]));
-        edits_recorded++;
-    }
-
-    var names = [];
-
-    function drawUI() {
-        setNames(names);
-        setEdits(edits_recorded);
-        setTimeout(drawUI, 50);
-    }
-
-    drawUI();
+    function scalex(x) { return ~~((x + 180) * (w / 360)); }
+    function scaley(y) { return ~~(h - ((y + 90) * (h / 180))); }
+    function setEdits(e) { edits.innerHTML = format(edits_recorded); }
 
     function setNames(names) {
         namesdiv.innerHTML = names.join(', ');
@@ -112,40 +86,35 @@
         while (names.length > lim) names.shift();
     }
 
-    osmStream.runFn(function(err, points) {
-        ration(points, 60 * 1000, function drawNew(d) {
-            if (names.indexOf(d.neu.user) == -1) {
-                names.push(d.neu.user);
-            }
-            if (d.neu.lat) {
-                var ll = [d.neu.lon, d.neu.lat];
-                drawPoint(d.neu.lon, d.neu.lat);
-                if (edits_recorded % 100 === 0) {
-                    setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
-                }
-            }
-            else if (d.neu.bbox) drawRect(p.neu.bbox);
-            if (edits_recorded % 1000 === 0) {
-                seenT = {};
-            }
-        });
-    });
+    function drawUI() {
+        setNames(names);
+        setEdits(edits_recorded);
+        setTimeout(drawUI, 100);
+    }
 
-    var reachback = 10;
-    var controller = osmStream.runFn(function(err, points) {
-        if (reachback-- === 0) controller.cancel();
-        if (reachback === 3) return;
-        ration(points, 60 * 1000, function drawReachback(d) {
-            if (names.indexOf(d.neu.user) == -1) {
-                names.push(d.neu.user);
-            }
-            if (d.neu.lat) drawPoint(d.neu.lon, d.neu.lat);
-            else if (d.neu.bbox) drawRect(p.neu.bbox);
-        });
-    }, 100, -1);
+    function doBlur(c, ctx) {
+        var im = new Image();
+        im.src = c.toDataURL();
+        ctx.globalAlpha = 0.1;
+        ctx.drawImage(im,  0,  1, w, h);
+        ctx.drawImage(im,  0,  -1, w, h);
+        ctx.drawImage(im,  1,  0, w, h);
+        ctx.drawImage(im,  -1,  0, w, h);
+        /*
+        ctx.drawImage(im,  1,  1, w, h);
+        ctx.drawImage(im, -1,  1, w, h);
+        ctx.drawImage(im,  1, -1, w, h);
+        ctx.drawImage(im, -1, -1, w, h);
+        */
+        ctx.globalAlpha = 0.8;
+    }
+
+    function doColorize(c) {
+        colorizeAlpha(c, [[0, 255, 255], [255, 0, 255], [255, 255, 255]]);
+    }
 })();
 
-},{"ration":2,"osm-stream":3,"format-number":4,"autoscale-canvas":5}],2:[function(require,module,exports){
+},{"ration":2,"format-number":3,"osm-stream":4,"canvas-colorize-alpha":5,"autoscale-canvas":6}],2:[function(require,module,exports){
 function ration(list, duration, cb) {
     if (!list.length) return;
     var per = duration / (list.length - 1), i = 0;
@@ -158,7 +127,7 @@ function ration(list, duration, cb) {
 
 if (typeof module !== 'undefined') module.exports = ration;
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 module.exports = formatter;
 
 function formatter(options) {
@@ -303,6 +272,42 @@ function truncate(x, length) {
   }
 }
 },{}],5:[function(require,module,exports){
+function colorizeAlpha(canvas, gradient) {
+    var ctx = canvas.getContext('2d'),
+    data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    for (var i = 0, l = data.data.length; i < l; i += 4) {
+        var alpha = data.data[i + 3] / 255,
+        color = getGradientPoint(gradient, alpha);
+        data.data[i + 0] = color[0];
+        data.data[i + 1] = color[1];
+        data.data[i + 2] = color[2];
+    }
+
+    ctx.putImageData(data, 0, 0);
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function lerpRgb(a, b, t) {
+        return [
+            lerp(a[0], b[0], t),
+            lerp(a[1], b[1], t),
+            lerp(a[2], b[2], t)];
+    }
+
+    function getGradientPoint(gradient, pt) {
+        var splits = 1 / (gradient.length - 1),
+            through = pt / splits,
+            from = Math.floor(through),
+            to = Math.ceil(through),
+            remainder = through - from;
+        return lerpRgb(gradient[from], gradient[to], remainder);
+    }
+}
+
+if (typeof module !== 'undefined') module.exports = colorizeAlpha;
+
+},{}],6:[function(require,module,exports){
 
 /**
  * Retina-enable the given `canvas`.
@@ -324,7 +329,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');
@@ -487,7 +492,7 @@ var osmStream = (function osmMinutely() {
 
 module.exports = osmStream;
 
-},{"reqwest":6,"through":7,"qs":8}],6:[function(require,module,exports){
+},{"reqwest":7,"through":8,"qs":9}],7:[function(require,module,exports){
 /*!
   * Reqwest! A general purpose XHR connection manager
   * (c) Dustin Diaz 2012
@@ -974,7 +979,7 @@ module.exports = osmStream;
   return reqwest
 });
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -1028,7 +1033,7 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function(process){var Stream = require('stream')
 
 // through
@@ -1134,7 +1139,7 @@ function through (write, end) {
 
 
 })(require("__browserify_process"))
-},{"stream":10,"__browserify_process":9}],8:[function(require,module,exports){
+},{"stream":11,"__browserify_process":10}],9:[function(require,module,exports){
 
 /**
  * Object#toString() ref for stringify().
@@ -1402,7 +1407,7 @@ function decode(str) {
   }
 }
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var events = require('events');
 var util = require('util');
 
@@ -1523,7 +1528,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":11,"util":12}],11:[function(require,module,exports){
+},{"events":12,"util":13}],12:[function(require,module,exports){
 (function(process){if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -1709,7 +1714,7 @@ EventEmitter.prototype.listeners = function(type) {
 };
 
 })(require("__browserify_process"))
-},{"__browserify_process":9}],12:[function(require,module,exports){
+},{"__browserify_process":10}],13:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -2062,5 +2067,5 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":11}]},{},[1])
+},{"events":12}]},{},[1])
 ;
