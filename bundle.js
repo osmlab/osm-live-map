@@ -37,15 +37,15 @@
 
     var seenT = {};
 
-    function setText(x, px) {
-        if (seenT[x]) return;
-        texts[texti].style.webkitTransform = 'translate(' + px[0] + 'px,' + px[1] + 'px)';
+    function setText(t, x, y) {
+        if (seenT[t]) return;
+        texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
         texts[texti].childNodes[0].innerHTML = '+';
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
-        texts[texti].childNodes[1].innerHTML = x;
-        texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + x;
+        texts[texti].childNodes[1].innerHTML = t;
+        texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + t;
         texti = (++texti > 4) ? 0 : texti;
-        seenT[x] = true;
+        seenT[t] = true;
     }
 
     ctx.globalAlpha = 0.8;
@@ -54,6 +54,7 @@
     function scalex(x) {
         return ~~((x + 180) * (w / 360));
     }
+
     function scaley(y) {
         return ~~(h - ((y + 90) * (h / 180)));
     }
@@ -70,18 +71,18 @@
         ctx.fill();
     }
 
-    function drawPoint(point) {
+    function drawPoint(x, y) {
         if (Math.random() > 0.95) {
             ctx.globalAlpha = 0.01;
             drawCircle(ctx,
-                scalex(point[0]),
-                scaley(point[1]), 6);
+                scalex(x),
+                scaley(y), 6);
         }
         ctx.fillStyle = '#CCE9FF';
         ctx.globalAlpha = 0.8;
         ctx.fillRect(
-            scalex(point[0]),
-            scaley(point[1]), 2, 2);
+            scalex(x),
+            scaley(y), 2, 2);
         edits_recorded++;
     }
 
@@ -112,18 +113,21 @@
     }
 
     osmStream.runFn(function(err, points) {
-        ration(points, 60 * 1000, function(d) {
+        ration(points, 60 * 1000, function drawNew(d) {
             if (names.indexOf(d.neu.user) == -1) {
                 names.push(d.neu.user);
             }
             if (d.neu.lat) {
                 var ll = [d.neu.lon, d.neu.lat];
-                drawPoint(ll);
+                drawPoint(d.neu.lon, d.neu.lat);
                 if (edits_recorded % 100 === 0) {
-                    setText(d.neu.user, [scalex(ll[0]), scaley(ll[1])]);
+                    setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
                 }
             }
             else if (d.neu.bbox) drawRect(p.neu.bbox);
+            if (edits_recorded % 1000 === 0) {
+                seenT = {};
+            }
         });
     });
 
@@ -131,17 +135,17 @@
     var controller = osmStream.runFn(function(err, points) {
         if (reachback-- === 0) controller.cancel();
         if (reachback === 3) return;
-        ration(points, 60 * 1000, function(d) {
+        ration(points, 60 * 1000, function drawReachback(d) {
             if (names.indexOf(d.neu.user) == -1) {
                 names.push(d.neu.user);
             }
-            if (d.neu.lat) drawPoint([d.neu.lon, d.neu.lat]);
+            if (d.neu.lat) drawPoint(d.neu.lon, d.neu.lat);
             else if (d.neu.bbox) drawRect(p.neu.bbox);
         });
     }, 100, -1);
 })();
 
-},{"ration":2,"format-number":3,"osm-stream":4,"autoscale-canvas":5}],2:[function(require,module,exports){
+},{"ration":2,"osm-stream":3,"format-number":4,"autoscale-canvas":5}],2:[function(require,module,exports){
 function ration(list, duration, cb) {
     if (!list.length) return;
     var per = duration / (list.length - 1), i = 0;
@@ -154,7 +158,7 @@ function ration(list, duration, cb) {
 
 if (typeof module !== 'undefined') module.exports = ration;
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 module.exports = formatter;
 
 function formatter(options) {
@@ -320,7 +324,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');
