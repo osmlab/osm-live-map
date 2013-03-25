@@ -15,17 +15,17 @@
         texti = 0,
         seenT = {},
         names = [],
-        edits_recorded = 0;
+        edits_recorded = 0,
+        edits_drawn = 0,
+        w = window.innerWidth,
+        ptsize = 1,
+        h = w / 2,
+        grid = {};
 
     for (var i = 0; i < 5; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
         texts[i].appendChild(document.createElement('a'));
-        texts[i].childNodes[0].className = 'edit-link';
-        texts[i].appendChild(document.createElement('a'));
     }
-
-    var w = window.innerWidth,
-        h = w / 2;
 
     c.width = w;
     c.height = h;
@@ -34,25 +34,9 @@
     ctx = c.getContext('2d');
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#fff';
 
     drawUI();
-
-    var ptsize = 1;
-
-    function drawPoint(d) {
-        if (names.indexOf(d.neu.user) == -1) names.push(d.neu.user);
-        if (d.neu.lat) {
-            ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
-            setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
-            edits_recorded++;
-            if (edits_recorded % 600 === 0) {
-                doBlur(c, ctx);
-            }
-            if (edits_recorded % 1000 === 0) {
-                doColorize(c);
-            }
-        }
-    }
 
     osmStream.runFn(function(err, points) {
         ration(points, 60 * 1000, drawPoint);
@@ -65,13 +49,39 @@
         ration(points, 60 * 1000, drawPoint);
     }, 100, -1);
 
+    function flare(x, y) {
+        ctx.beginPath();
+        var ang = Math.random() * 2 * Math.PI;
+        ctx.moveTo(x, y);
+        ctx.lineTo(
+            (Math.cos(ang) * 10) + x,
+            (Math.sin(ang) * 10) + y);
+        ctx.globalAlpha = 0.1;
+        ctx.stroke();
+        ctx.globalAlpha = 0.8;
+    }
+
+    function drawPoint(d) {
+        if (names.indexOf(d.neu.user) == -1) names.push(d.neu.user);
+        var quant = ~~scalex(d.neu.lon) + ',' + ~~scaley(d.neu.lat);
+        if (d.neu.lat && !grid[quant] || grid[quant] < 5) {
+            ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
+            flare(scalex(d.neu.lon), scaley(d.neu.lat));
+            setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
+            if (edits_drawn % 100 === 0) doColorize(c);
+            ctx = c.getContext('2d');
+            if (!grid[quant]) grid[quant] = 0;
+            grid[quant]++;
+            edits_drawn++;
+        }
+        edits_recorded++;
+    }
+
     function setText(t, x, y) {
         if (edits_recorded % 100 || seenT[t]) return;
         texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
-        texts[texti].childNodes[0].innerHTML = '+';
-        texts[texti].childNodes[0].href = 'http://openstreetmap.org/browse/changeset/' + id;
-        texts[texti].childNodes[1].innerHTML = t;
-        texts[texti].childNodes[1].href = 'http://openstreetmap.org/user/' + t;
+        texts[texti].childNodes[0].innerHTML = t;
+        texts[texti].childNodes[0].href = 'http://openstreetmap.org/user/' + t;
         texti = (++texti > 4) ? 0 : texti;
         seenT[t] = true;
     }
@@ -92,29 +102,12 @@
         setTimeout(drawUI, 100);
     }
 
-    function doBlur(c, ctx) {
-        var im = new Image();
-        im.src = c.toDataURL();
-        ctx.globalAlpha = 0.1;
-        ctx.drawImage(im,  0,  1, w, h);
-        ctx.drawImage(im,  0,  -1, w, h);
-        ctx.drawImage(im,  1,  0, w, h);
-        ctx.drawImage(im,  -1,  0, w, h);
-        /*
-        ctx.drawImage(im,  1,  1, w, h);
-        ctx.drawImage(im, -1,  1, w, h);
-        ctx.drawImage(im,  1, -1, w, h);
-        ctx.drawImage(im, -1, -1, w, h);
-        */
-        ctx.globalAlpha = 0.8;
-    }
-
     function doColorize(c) {
         colorizeAlpha(c, [[0, 255, 255], [255, 0, 255], [255, 255, 255]]);
     }
 })();
 
-},{"ration":2,"format-number":3,"osm-stream":4,"canvas-colorize-alpha":5,"autoscale-canvas":6}],2:[function(require,module,exports){
+},{"ration":2,"format-number":3,"canvas-colorize-alpha":4,"osm-stream":5,"autoscale-canvas":6}],2:[function(require,module,exports){
 function ration(list, duration, cb) {
     if (!list.length) return;
     var per = duration / (list.length - 1), i = 0;
@@ -271,7 +264,7 @@ function truncate(x, length) {
     return x;
   }
 }
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 function colorizeAlpha(canvas, gradient) {
     var ctx = canvas.getContext('2d'),
     data = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -329,7 +322,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');

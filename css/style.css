@@ -1,6 +1,6 @@
 body {
     background:#000;
-    font: normal 12px/20px 'Helvetica', sans-serif;
+    font: normal 12px/20px 'Open Sans', sans-serif;
     color: #eee;
     padding: 0;
     margin: 0;
@@ -43,6 +43,8 @@ h3 {
     position: absolute;
     background: rgba(0, 0, 0, 0.2);
     -webkit-transition: -webkit-transform 500ms linear;
+    font-size:10px;
+    opacity:0.6;
 }
 
 #overlay span a {
