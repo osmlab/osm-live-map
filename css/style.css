@@ -69,9 +69,13 @@ h3 {
 }
 
 #names {
+    padding:10px;
+    color:#fff;
+    white-space: nowrap;
+    overflow:hidden;
     display:block;
-    opacity:0.5;
-    font-size:10px;
+    font-size:18px;
+    font-family:monospace;
 }
 
 a.edit-link {

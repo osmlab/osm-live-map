@@ -48,25 +48,29 @@
         ration(points, 60 * 1000, drawPoint);
     }, 100, -1);
 
-    function flare(x, y) {
+    function flare(x, y, n) {
+        var ang = Math.random() * 2 * Math.PI,
+            len = 2 + (Math.random() * 8);
+
+        if (n) len += n / 2;
+
         ctx.beginPath();
-        var ang = Math.random() * 2 * Math.PI;
         ctx.moveTo(x, y);
         ctx.lineTo(
-            (Math.cos(ang) * 10) + x,
-            (Math.sin(ang) * 10) + y);
+            ~~((Math.cos(ang) * len) + x),
+            ~~((Math.sin(ang) * len) + y));
         ctx.globalAlpha = 0.1;
         ctx.stroke();
         ctx.globalAlpha = 0.8;
     }
 
     function drawPoint(d) {
-        if (names.indexOf(d.neu.user) == -1) names.push(d.neu.user);
-        var quant = ~~scalex(d.neu.lon) + ',' + ~~scaley(d.neu.lat);
-        if (d.neu.lat && !grid[quant] || grid[quant] < 5) {
+        if (names.indexOf(d.neu.user) == -1) names.unshift(d.neu.user);
+        var quant = scalex(d.neu.lon) + ',' + scaley(d.neu.lat);
+        setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
+        if (d.neu.lat && !grid[quant] || grid[quant] < 15) {
             ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
-            flare(scalex(d.neu.lon), scaley(d.neu.lat));
-            setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
+            flare(scalex(d.neu.lon), scaley(d.neu.lat), grid[quant]);
             if (edits_drawn % 100 === 0) doColorize(c);
             ctx = c.getContext('2d');
             if (!grid[quant]) grid[quant] = 0;
@@ -77,7 +81,7 @@
     }
 
     function setText(t, x, y) {
-        if (edits_recorded % 100 || seenT[t]) return;
+        if (edits_recorded % 10 || seenT[t]) return;
         texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
         texts[texti].childNodes[0].innerHTML = t;
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/user/' + t;
@@ -92,7 +96,7 @@
     function setNames(names) {
         namesdiv.innerHTML = names.join(', ');
         var lim = 50;
-        while (names.length > lim) names.shift();
+        while (names.length > lim) names.pop();
     }
 
     function drawUI() {
