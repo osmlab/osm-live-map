@@ -29,6 +29,8 @@
 
     c.width = w;
     c.height = h;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
     c = autoscale(c);
 
     var ctx = c.getContext('2d');
