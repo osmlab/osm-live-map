@@ -1,4 +1,6 @@
 (function() {
+    'use strict';
+
     var autoscale = require('autoscale-canvas'),
         ration = require('ration'),
         format = require('format-number')(),
@@ -7,9 +9,8 @@
 
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
-        edits = document.getElementById('edits');
+        edits = document.getElementById('edits'),
         namesdiv = document.getElementById('names'),
-        id = '',
         texts = [],
         texti = 0,
         seenT = {},
@@ -28,9 +29,11 @@
 
     c.width = w;
     c.height = h;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
     c = autoscale(c);
 
-    ctx = c.getContext('2d');
+    var ctx = c.getContext('2d');
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#fff';
