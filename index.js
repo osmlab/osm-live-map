@@ -11,7 +11,6 @@
         overlay = document.getElementById('overlay'),
         edits = document.getElementById('edits'),
         namesdiv = document.getElementById('names'),
-        id = '',
         texts = [],
         texti = 0,
         seenT = {},
