@@ -22,6 +22,11 @@
         h = w / 2,
         grid = {};
 
+    window.onresize = function() {
+        w = window.innerWidth;
+        h = w / 2;
+    };
+
     for (var i = 0; i < 10; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
         texts[i].appendChild(document.createElement('a'));
