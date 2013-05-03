@@ -44,7 +44,6 @@ h3 {
     background: rgba(0, 0, 0, 0.2);
     -webkit-transition: -webkit-transform 500ms linear;
     font-size:10px;
-    opacity:0.6;
 }
 
 #overlay span a {
@@ -65,7 +64,7 @@ h3 {
 }
 
 #edits {
-    font:bold 28px 'Helvetica Neue';
+    font:bold 42px 'Helvetica Neue';
 }
 
 #names {

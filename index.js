@@ -22,7 +22,7 @@
         h = w / 2,
         grid = {};
 
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 10; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
         texts[i].appendChild(document.createElement('a'));
     }
@@ -41,15 +41,10 @@
     drawUI();
 
     osmStream.runFn(function(err, points) {
-        ration(points, 60 * 1000, drawPoint);
+        try {
+            ration(points, 60 * 1000, drawPoint);
+        } catch(e) { }
     });
-
-    var reachback = 10;
-    var controller = osmStream.runFn(function(err, points) {
-        if (reachback-- === 0) controller.cancel();
-        if (reachback === 3) return;
-        ration(points, 60 * 1000, drawPoint);
-    }, 100, -1);
 
     function flare(x, y, n) {
         var ang = Math.random() * 2 * Math.PI,
@@ -68,12 +63,14 @@
     }
 
     function drawPoint(d) {
-        if (names.indexOf(d.neu.user) == -1) names.unshift(d.neu.user);
-        var quant = scalex(d.neu.lon) + ',' + scaley(d.neu.lat);
-        setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
-        if (d.neu.lat && !grid[quant] || grid[quant] < 15) {
-            ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
-            flare(scalex(d.neu.lon), scaley(d.neu.lat), grid[quant]);
+        if (names.indexOf(d.meta.user) == -1) names.unshift(d.meta.user);
+        var lat = d.feature.bounds[0];
+        var lon = d.feature.bounds[1];
+        var quant = scalex(lon) + ',' + scaley(lat);
+        setText(d.meta.user, scalex(lon), scaley(lat));
+        if (lat && !grid[quant] || grid[quant] < 15) {
+            ctx.fillRect(scalex(lon), scaley(lat), ptsize, ptsize);
+            flare(scalex(lon), scaley(lat), grid[quant]);
             if (edits_drawn % 100 === 0) doColorize(c);
             ctx = c.getContext('2d');
             if (!grid[quant]) grid[quant] = 0;
@@ -84,12 +81,13 @@
     }
 
     function setText(t, x, y) {
-        if (edits_recorded % 10 || seenT[t]) return;
+        // if (edits_recorded % 10 || seenT[t]) return;
+        if (edits_recorded % 10) return;
         texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
         texts[texti].childNodes[0].innerHTML = t;
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/user/' + t;
-        texti = (++texti > 4) ? 0 : texti;
-        seenT[t] = true;
+        if (++texti > texts.length - 1) texti = 0;
+        // seenT[t] = true;
     }
 
     function scalex(x) { return ~~((x + 180) * (w / 360)); }

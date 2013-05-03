@@ -1,5 +1,7 @@
-;(function(e,t,n){function r(n,i){if(!t[n]){if(!e[n]){var s=typeof require=="function"&&require;if(!i&&s)return s(n,!0);throw new Error("Cannot find module '"+n+"'")}var o=t[n]={exports:{}};e[n][0](function(t){var i=e[n][1][t];return r(i?i:t)},o,o.exports)}return t[n].exports}for(var i=0;i<n.length;i++)r(n[i]);return r})({1:[function(require,module,exports){
+;(function(e,t,n){function i(n,s){if(!t[n]){if(!e[n]){var o=typeof require=="function"&&require;if(!s&&o)return o(n,!0);if(r)return r(n,!0);throw new Error("Cannot find module '"+n+"'")}var u=t[n]={exports:{}};e[n][0].call(u.exports,function(t){var r=e[n][1][t];return i(r?r:t)},u,u.exports)}return t[n].exports}var r=typeof require=="function"&&require;for(var s=0;s<n.length;s++)i(n[s]);return i})({1:[function(require,module,exports){
 (function() {
+    'use strict';
+
     var autoscale = require('autoscale-canvas'),
         ration = require('ration'),
         format = require('format-number')(),
@@ -8,9 +10,8 @@
 
     var c = document.getElementById('c'),
         overlay = document.getElementById('overlay'),
-        edits = document.getElementById('edits');
+        edits = document.getElementById('edits'),
         namesdiv = document.getElementById('names'),
-        id = '',
         texts = [],
         texti = 0,
         seenT = {},
@@ -22,16 +23,18 @@
         h = w / 2,
         grid = {};
 
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 10; i++) {
         texts.push(overlay.appendChild(document.createElement('span')));
         texts[i].appendChild(document.createElement('a'));
     }
 
     c.width = w;
     c.height = h;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
     c = autoscale(c);
 
-    ctx = c.getContext('2d');
+    var ctx = c.getContext('2d');
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#fff';
@@ -39,15 +42,10 @@
     drawUI();
 
     osmStream.runFn(function(err, points) {
-        ration(points, 60 * 1000, drawPoint);
+        try {
+            ration(points, 60 * 1000, drawPoint);
+        } catch(e) { }
     });
-
-    var reachback = 10;
-    var controller = osmStream.runFn(function(err, points) {
-        if (reachback-- === 0) controller.cancel();
-        if (reachback === 3) return;
-        ration(points, 60 * 1000, drawPoint);
-    }, 100, -1);
 
     function flare(x, y, n) {
         var ang = Math.random() * 2 * Math.PI,
@@ -66,12 +64,14 @@
     }
 
     function drawPoint(d) {
-        if (names.indexOf(d.neu.user) == -1) names.unshift(d.neu.user);
-        var quant = scalex(d.neu.lon) + ',' + scaley(d.neu.lat);
-        setText(d.neu.user, scalex(d.neu.lon), scaley(d.neu.lat));
-        if (d.neu.lat && !grid[quant] || grid[quant] < 15) {
-            ctx.fillRect(scalex(d.neu.lon), scaley(d.neu.lat), ptsize, ptsize);
-            flare(scalex(d.neu.lon), scaley(d.neu.lat), grid[quant]);
+        if (names.indexOf(d.meta.user) == -1) names.unshift(d.meta.user);
+        var lat = d.feature.bounds[0];
+        var lon = d.feature.bounds[1];
+        var quant = scalex(lon) + ',' + scaley(lat);
+        setText(d.meta.user, scalex(lon), scaley(lat));
+        if (lat && !grid[quant] || grid[quant] < 15) {
+            ctx.fillRect(scalex(lon), scaley(lat), ptsize, ptsize);
+            flare(scalex(lon), scaley(lat), grid[quant]);
             if (edits_drawn % 100 === 0) doColorize(c);
             ctx = c.getContext('2d');
             if (!grid[quant]) grid[quant] = 0;
@@ -82,12 +82,13 @@
     }
 
     function setText(t, x, y) {
-        if (edits_recorded % 10 || seenT[t]) return;
+        // if (edits_recorded % 10 || seenT[t]) return;
+        if (edits_recorded % 10) return;
         texts[texti].style.webkitTransform = 'translate(' + x + 'px,' + y + 'px)';
         texts[texti].childNodes[0].innerHTML = t;
         texts[texti].childNodes[0].href = 'http://openstreetmap.org/user/' + t;
-        texti = (++texti > 4) ? 0 : texti;
-        seenT[t] = true;
+        if (++texti > texts.length - 1) texti = 0;
+        // seenT[t] = true;
     }
 
     function scalex(x) { return ~~((x + 180) * (w / 360)); }
@@ -111,7 +112,7 @@
     }
 })();
 
-},{"ration":2,"format-number":3,"canvas-colorize-alpha":4,"osm-stream":5,"autoscale-canvas":6}],2:[function(require,module,exports){
+},{"ration":2,"format-number":3,"osm-stream":4,"canvas-colorize-alpha":5,"autoscale-canvas":6}],2:[function(require,module,exports){
 function ration(list, duration, cb) {
     if (!list.length) return;
     var per = duration / (list.length - 1), i = 0;
@@ -268,12 +269,15 @@ function truncate(x, length) {
     return x;
   }
 }
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 function colorizeAlpha(canvas, gradient) {
+    'use strict';
+
     var ctx = canvas.getContext('2d'),
-    data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        data = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
     for (var i = 0, l = data.data.length; i < l; i += 4) {
+        if (data.data[i + 3] === 0) continue;
         var alpha = data.data[i + 3] / 255,
         color = getGradientPoint(gradient, alpha);
         data.data[i + 0] = color[0];
@@ -326,7 +330,7 @@ module.exports = function(canvas){
   }
   return canvas;
 };
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var reqwest = require('reqwest'),
     qs = require('qs'),
     through = require('through');
@@ -343,9 +347,9 @@ var osmStream = (function osmMinutely() {
         return baseUrl + minuteStatePath;
     }
 
-    function changeUrl(id) {
+    function changeUrl(id, bbox) {
         return baseUrl + changePath + qs.stringify({
-            id: id, info: 'no', bbox: '-180,-90,180,90'
+            id: id, info: 'no', bbox: bbox || '-180,-90,180,90'
         });
     }
 
@@ -360,9 +364,9 @@ var osmStream = (function osmMinutely() {
         });
     }
 
-    function requestChangeset(state, cb) {
+    function requestChangeset(state, cb, bbox) {
         reqwest({
-            url: changeUrl(state),
+            url: changeUrl(state, bbox),
             crossOrigin: true,
             type: 'xml',
             success: function(res) {
@@ -371,22 +375,59 @@ var osmStream = (function osmMinutely() {
         });
     }
 
+    function meta(x) {
+        return {
+            type: x.tagName,
+            user: x.getAttribute('user'),
+            timestamp: x.getAttribute('timestamp'),
+            changeset: +x.getAttribute('changeset'),
+            id: +x.getAttribute('id')
+        };
+    }
+
     function parseNode(x) {
         if (!x) return undefined;
-        var o = {
-            type: x.tagName,
-            lat: +x.getAttribute('lat'),
-            lon: +x.getAttribute('lon'),
-            user: x.getAttribute('user'),
-            timestamp: x.getAttribute('timestamp')
-        };
-        if (o.type == 'way') {
-            var bounds = get(x, ['bounds']);
+        var o = meta(x);
+        var bounds, tgs;
+        if (o.type === 'way') {
+            bounds = get(x, ['bounds']);
             o.bounds = [
                 +bounds.getAttribute('maxlat'),
                 +bounds.getAttribute('maxlon'),
                 +bounds.getAttribute('minlat'),
                 +bounds.getAttribute('minlon')];
+
+            var nds = x.getElementsByTagName('nd');
+            var nodes = [];
+            for (var i = 0; i < nds.length; i++) {
+                nodes.push([
+                    +nds[i].getAttribute('lat'),
+                    +nds[i].getAttribute('lon')
+                ]);
+            }
+            if (nodes.length > 0) {
+                o.linestring = nodes;
+            }
+
+            tgs = x.getElementsByTagName('tag');
+            var tags = {};
+            for (var j = 0; j < tgs.length; j++) {
+                tags[tgs[j].getAttribute("k")] = tgs[j].getAttribute("v");
+            }
+            o.tags = tags;
+        } else if (o.type === 'node') {
+            o.bounds = [
+                +x.getAttribute('lat'),
+                +x.getAttribute('lon'),
+                +x.getAttribute('lat'),
+                +x.getAttribute('lon')];
+
+            tgs = x.getElementsByTagName('tag');
+            var tags = {};
+            for (var j = 0; j < tgs.length; j++) {
+                tags[tgs[j].getAttribute("k")] = tgs[j].getAttribute("v");
+            }
+            o.tags = tags;
         }
         return o;
     }
@@ -399,39 +440,56 @@ var osmStream = (function osmMinutely() {
         }
     }
 
-    function run(id, cb) {
+    function run(id, cb, bbox) {
         requestChangeset(id, function(err, xml) {
-            if (err) return cb([]);
+            if (err) return cb('Error');
+            if (!xml.getElementsByTagName) return cb('No items');
             var actions = xml.getElementsByTagName('action'), a;
             var items = [];
             for (var i = 0; i < actions.length; i++) {
                 var o = {};
                 a = actions[i];
                 o.type = a.getAttribute('type');
+                // ignore relations!
+                if (a.getElementsByTagName('relation').length) break;
+
                 if (o.type == 'modify') {
-                    o.old = parseNode(get(get(a, 'old'), ['node', 'way']));
-                    o.neu = parseNode(get(get(a, 'new'), ['node', 'way']));
-                } else {
-                    o.neu = parseNode(get(a, ['node', 'way']));
+
+                    o.before = parseNode(get(get(a, ['old']), ['node', 'way']));
+                    o.feature = parseNode(get(get(a, ['new']), ['node', 'way']));
+                    o.meta = meta(get(get(a, ['new']), ['node', 'way']));
+
+                } else if (o.type == 'delete') {
+
+                    o.feature = parseNode(get(get(a, ['old']), ['node', 'way']));
+                    o.meta = meta(get(get(a, ['new']), ['node', 'way']));
+
+                } else if (o.type == 'create') {
+
+                    o.feature = parseNode(get(a, ['node', 'way']));
+                    o.meta = meta(get(a, ['node', 'way']));
+
                 }
-                if (o.old || o.neu) {
+
+                if (o.feature) {
                     items.push(o);
                 }
             }
-            cb(items);
-        });
+
+            cb(null, items);
+        }, bbox);
     }
 
-    s.once = function(cb) {
+    s.once = function(cb, bbox) {
         requestState(function(err, state) {
-            var stream = through(function write(data) {
+            var stream = through(function write(err, data) {
                 cb(null, data);
             });
-            run(state, stream.write);
+            run(state, stream.write, bbox);
         });
     };
 
-    s.run = function(cb, duration, dir) {
+    s.run = function(cb, duration, dir, bbox) {
         dir = dir || 1;
         duration = duration || 60 * 1000;
         var cancel = false;
@@ -452,32 +510,34 @@ var osmStream = (function osmMinutely() {
             }
             cb(null, stream);
             function iterate() {
-                run(state, function(items) {
-                    write(items);
-                    state += dir;
+                run(state, function(err, items) {
+                    if (!err) {
+                        write(items);
+                        state += dir;
+                    }
                     if (!cancel) setTimeout(iterate, duration);
-                });
+                }, bbox);
             }
             iterate();
         });
         return { cancel: setCancel };
     };
 
-    s.runFn = function(cb, duration, dir) {
+    s.runFn = function(cb, duration, dir, bbox) {
         dir = dir || 1;
         duration = duration || 60 * 1000;
         function setCancel() { cancel = true; }
         var cancel = false;
         requestState(function(err, state) {
-            function write(items) {
-                cb(null, items);
-            }
+            function write(items) { cb(null, items); }
             function iterate() {
-                run(state, function(items) {
-                    write(items);
-                    state += dir;
+                run(state, function(err, items) {
+                    if (!err) {
+                        write(items);
+                        state += dir;
+                    }
                     if (!cancel) setTimeout(iterate, duration);
-                });
+                }, bbox);
             }
             iterate();
         });
@@ -489,18 +549,180 @@ var osmStream = (function osmMinutely() {
 
 module.exports = osmStream;
 
-},{"reqwest":7,"through":8,"qs":9}],7:[function(require,module,exports){
-/*!
+},{"reqwest":7,"through":8,"qs":9}],10:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    if (canPost) {
+        var queue = [];
+        window.addEventListener('message', function (ev) {
+            if (ev.source === window && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+}
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],8:[function(require,module,exports){
+(function(process){var Stream = require('stream')
+
+// through
+//
+// a stream that does nothing but re-emit the input.
+// useful for aggregating a series of changing but not ending streams into one stream)
+
+exports = module.exports = through
+through.through = through
+
+//create a readable writable stream.
+
+function through (write, end, opts) {
+  write = write || function (data) { this.queue(data) }
+  end = end || function () { this.queue(null) }
+
+  var ended = false, destroyed = false, buffer = []
+  var stream = new Stream()
+  stream.readable = stream.writable = true
+  stream.paused = false
+
+//  stream.autoPause   = !(opts && opts.autoPause   === false)
+  stream.autoDestroy = !(opts && opts.autoDestroy === false)
+
+  stream.write = function (data) {
+    write.call(this, data)
+    return !stream.paused
+  }
+
+  function drain() {
+    while(buffer.length && !stream.paused) {
+      var data = buffer.shift()
+      if(null === data)
+        return stream.emit('end')
+      else
+        stream.emit('data', data)
+    }
+  }
+
+  stream.queue = stream.push = function (data) {
+    buffer.push(data)
+    drain()
+    return stream
+  }
+
+  //this will be registered as the first 'end' listener
+  //must call destroy next tick, to make sure we're after any
+  //stream piped from here.
+  //this is only a problem if end is not emitted synchronously.
+  //a nicer way to do this is to make sure this is the last listener for 'end'
+
+  stream.on('end', function () {
+    stream.readable = false
+    if(!stream.writable && stream.autoDestroy)
+      process.nextTick(function () {
+        stream.destroy()
+      })
+  })
+
+  function _end () {
+    stream.writable = false
+    end.call(stream)
+    if(!stream.readable && stream.autoDestroy)
+      stream.destroy()
+  }
+
+  stream.end = function (data) {
+    if(ended) return
+    ended = true
+    if(arguments.length) stream.write(data)
+    _end() // will emit or queue
+    return stream
+  }
+
+  stream.destroy = function () {
+    if(destroyed) return
+    destroyed = true
+    ended = true
+    buffer.length = 0
+    stream.writable = stream.readable = false
+    stream.emit('close')
+    return stream
+  }
+
+  stream.pause = function () {
+    if(stream.paused) return
+    stream.paused = true
+    return stream
+  }
+
+  stream.resume = function () {
+    if(stream.paused) {
+      stream.paused = false
+      stream.emit('resume')
+    }
+    drain()
+    //may have become paused again,
+    //as drain emits 'data'.
+    if(!stream.paused)
+      stream.emit('drain')
+    return stream
+  }
+  return stream
+}
+
+
+})(require("__browserify_process"))
+},{"stream":11,"__browserify_process":10}],7:[function(require,module,exports){
+(function(){/*!
   * Reqwest! A general purpose XHR connection manager
-  * (c) Dustin Diaz 2012
+  * (c) Dustin Diaz 2013
   * https://github.com/ded/reqwest
   * license MIT
   */
-(function (name, context, definition) {
+!function (name, context, definition) {
   if (typeof module != 'undefined' && module.exports) module.exports = definition()
   else if (typeof define == 'function' && define.amd) define(definition)
   else context[name] = definition()
-})('reqwest', this, function () {
+}('reqwest', this, function () {
 
   var win = window
     , doc = document
@@ -516,55 +738,70 @@ module.exports = osmStream;
     , xmlHttpRequest = 'XMLHttpRequest'
     , noop = function () {}
 
-  var isArray = typeof Array.isArray == 'function' ? Array.isArray : function (a) {
-    return a instanceof Array
-  }
-  var defaultHeaders = {
-      contentType: 'application/x-www-form-urlencoded'
-    , requestedWith: xmlHttpRequest
-    , accept: {
-        '*':  'text/javascript, text/html, application/xml, text/xml, */*'
-      , xml:  'application/xml, text/xml'
-      , html: 'text/html'
-      , text: 'text/plain'
-      , json: 'application/json, text/javascript'
-      , js:   'application/javascript, text/javascript'
-      }
-    }
-  var xhr = win[xmlHttpRequest] ?
-    function () {
-      return new XMLHttpRequest()
-    } :
-    function () {
-      return new ActiveXObject('Microsoft.XMLHTTP')
-    }
+    , isArray = typeof Array.isArray == 'function'
+        ? Array.isArray
+        : function (a) {
+            return a instanceof Array
+          }
 
-  function handleReadyState(o, success, error) {
-    return function () {
-      if (o && o[readyState] == 4) {
-        o.onreadystatechange = noop;
-        if (twoHundo.test(o.status)) {
-          success(o)
-        } else {
-          error(o)
+    , defaultHeaders = {
+          contentType: 'application/x-www-form-urlencoded'
+        , requestedWith: xmlHttpRequest
+        , accept: {
+              '*':  'text/javascript, text/html, application/xml, text/xml, */*'
+            , xml:  'application/xml, text/xml'
+            , html: 'text/html'
+            , text: 'text/plain'
+            , json: 'application/json, text/javascript'
+            , js:   'application/javascript, text/javascript'
+          }
+      }
+
+    , xhr = win[xmlHttpRequest]
+        ? function () {
+            return new XMLHttpRequest()
+          }
+        : function () {
+            return new ActiveXObject('Microsoft.XMLHTTP')
+          }
+    , globalSetupOptions = {
+        dataFilter: function (data) {
+          return data
         }
+      }
+
+  function handleReadyState(r, success, error) {
+    return function () {
+      // use _aborted to mitigate against IE err c00c023f
+      // (can't read props on aborted request objects)
+      if (r._aborted) return error(r.request)
+      if (r.request && r.request[readyState] == 4) {
+        r.request.onreadystatechange = noop
+        if (twoHundo.test(r.request.status))
+          success(r.request)
+        else
+          error(r.request)
       }
     }
   }
 
   function setHeaders(http, o) {
-    var headers = o.headers || {}, h
-    headers.Accept = headers.Accept || defaultHeaders.accept[o.type] || defaultHeaders.accept['*']
+    var headers = o.headers || {}
+      , h
+
+    headers.Accept = headers.Accept
+      || defaultHeaders.accept[o.type]
+      || defaultHeaders.accept['*']
+
     // breaks cross-origin requests with legacy browsers
     if (!o.crossOrigin && !headers[requestedWith]) headers[requestedWith] = defaultHeaders.requestedWith
     if (!headers[contentType]) headers[contentType] = o.contentType || defaultHeaders.contentType
-    for (h in headers) {
+    for (h in headers)
       headers.hasOwnProperty(h) && http.setRequestHeader(h, headers[h])
-    }
   }
 
   function setCredentials(http, o) {
-    if (typeof o.withCredentials !== "undefined" && typeof http.withCredentials !== "undefined") {
+    if (typeof o.withCredentials !== 'undefined' && typeof http.withCredentials !== 'undefined') {
       http.withCredentials = !!o.withCredentials
     }
   }
@@ -573,7 +810,7 @@ module.exports = osmStream;
     lastValue = data
   }
 
-  function urlappend(url, s) {
+  function urlappend (url, s) {
     return url + (/\?/.test(url) ? '&' : '?') + s
   }
 
@@ -628,10 +865,22 @@ module.exports = osmStream;
 
     // Add the script to the DOM head
     head.appendChild(script)
+
+    // Enable JSONP timeout
+    return {
+      abort: function () {
+        script.onload = script.onreadystatechange = null
+        o.error && o.error({}, 'Request is aborted: timeout', {})
+        lastValue = undefined
+        head.removeChild(script)
+        loaded = 1
+      }
+    }
   }
 
-  function getRequest(o, fn, err) {
-    var method = (o.method || 'GET').toUpperCase()
+  function getRequest(fn, err) {
+    var o = this.o
+      , method = (o.method || 'GET').toUpperCase()
       , url = typeof o === 'string' ? o : o.url
       // convert non-string objects to query-string form unless o.processData is false
       , data = (o.processData !== false && o.data && typeof o.data !== 'string')
@@ -652,7 +901,7 @@ module.exports = osmStream;
     http.open(method, url, true)
     setHeaders(http, o)
     setCredentials(http, o)
-    http.onreadystatechange = handleReadyState(http, fn, err)
+    http.onreadystatechange = handleReadyState(this, fn, err)
     o.before && o.before(http)
     http.send(data)
     return http
@@ -716,7 +965,7 @@ module.exports = osmStream;
       })
     }
 
-    function complete(resp) {
+    function complete (resp) {
       o.timeout && clearTimeout(self.timeout)
       self.timeout = null
       while (self._completeHandlers.length > 0) {
@@ -724,8 +973,10 @@ module.exports = osmStream;
       }
     }
 
-    function success(resp) {
-      var r = resp.responseText
+    function success (resp) {
+      // use global data filter on response text
+      var filteredResponse = globalSetupOptions.dataFilter(resp.responseText, type)
+        , r = resp.responseText = filteredResponse
       if (r) {
         switch (type) {
         case 'json':
@@ -734,16 +985,21 @@ module.exports = osmStream;
           } catch (err) {
             return error(resp, 'Could not parse JSON in response', err)
           }
-          break;
+          break
         case 'js':
           resp = eval(r)
-          break;
+          break
         case 'html':
           resp = r
-          break;
+          break
         case 'xml':
-          resp = resp.responseXML;
-          break;
+          resp = resp.responseXML
+              && resp.responseXML.parseError // IE trololo
+              && resp.responseXML.parseError.errorCode
+              && resp.responseXML.parseError.reason
+            ? null
+            : resp.responseXML
+          break
         }
       }
 
@@ -768,11 +1024,12 @@ module.exports = osmStream;
       complete(resp)
     }
 
-    this.request = getRequest(o, success, error)
+    this.request = getRequest.call(this, success, error)
   }
 
   Reqwest.prototype = {
     abort: function () {
+      this._aborted = true
       this.request.abort()
     }
 
@@ -843,32 +1100,33 @@ module.exports = osmStream;
           if (o && !o.disabled)
             cb(n, normalize(o.attributes.value && o.attributes.value.specified ? o.value : o.text))
         }
+      , ch, ra, val, i
 
     // don't serialize elements that are disabled or without a name
-    if (el.disabled || !n) return;
+    if (el.disabled || !n) return
 
     switch (t) {
     case 'input':
       if (!/reset|button|image|file/i.test(el.type)) {
-        var ch = /checkbox/i.test(el.type)
-          , ra = /radio/i.test(el.type)
-          , val = el.value;
+        ch = /checkbox/i.test(el.type)
+        ra = /radio/i.test(el.type)
+        val = el.value
         // WebKit gives us "" instead of "on" if a checkbox has no value, so correct it here
-        (!(ch || ra) || el.checked) && cb(n, normalize(ch && val === '' ? 'on' : val))
+        ;(!(ch || ra) || el.checked) && cb(n, normalize(ch && val === '' ? 'on' : val))
       }
-      break;
+      break
     case 'textarea':
       cb(n, normalize(el.value))
-      break;
+      break
     case 'select':
       if (el.type.toLowerCase() === 'select-one') {
         optCb(el.selectedIndex >= 0 ? el.options[el.selectedIndex] : null)
       } else {
-        for (var i = 0; el.length && i < el.length; i++) {
+        for (i = 0; el.length && i < el.length; i++) {
           el.options[i].selected && optCb(el.options[i])
         }
       }
-      break;
+      break
     }
   }
 
@@ -877,13 +1135,14 @@ module.exports = osmStream;
   // called with 'this'=callback to use for serial() on each element
   function eachFormElement() {
     var cb = this
-      , e, i, j
+      , e, i
       , serializeSubtags = function (e, tags) {
-        for (var i = 0; i < tags.length; i++) {
-          var fa = e[byTag](tags[i])
-          for (j = 0; j < fa.length; j++) serial(fa[j], cb)
+          var i, j, fa
+          for (i = 0; i < tags.length; i++) {
+            fa = e[byTag](tags[i])
+            for (j = 0; j < fa.length; j++) serial(fa[j], cb)
+          }
         }
-      }
 
     for (i = 0; i < arguments.length; i++) {
       e = arguments[i]
@@ -934,30 +1193,59 @@ module.exports = osmStream;
     return fn.apply(null, args)
   }
 
-  reqwest.toQueryString = function (o) {
-    var qs = '', i
+  reqwest.toQueryString = function (o, trad) {
+    var prefix, i
+      , traditional = trad || false
+      , s = []
       , enc = encodeURIComponent
-      , push = function (k, v) {
-          qs += enc(k) + '=' + enc(v) + '&'
+      , add = function (key, value) {
+          // If value is a function, invoke it and return its value
+          value = ('function' === typeof value) ? value() : (value == null ? '' : value)
+          s[s.length] = enc(key) + '=' + enc(value)
         }
-
+    // If an array was passed in, assume that it is an array of form elements.
     if (isArray(o)) {
-      for (i = 0; o && i < o.length; i++) push(o[i].name, o[i].value)
+      for (i = 0; o && i < o.length; i++) add(o[i].name, o[i].value)
     } else {
-      for (var k in o) {
-        if (!Object.hasOwnProperty.call(o, k)) continue;
-        var v = o[k]
-        if (isArray(v)) {
-          for (i = 0; i < v.length; i++) push(k, v[i])
-        } else push(k, o[k])
+      // If traditional, encode the "old" way (the way 1.3.2 or older
+      // did it), otherwise encode params recursively.
+      for (prefix in o) {
+        buildParams(prefix, o[prefix], traditional, add)
       }
     }
 
     // spaces should be + according to spec
-    return qs.replace(/&$/, '').replace(/%20/g, '+')
+    return s.join('&').replace(/%20/g, '+')
   }
 
-  reqwest.getcallbackPrefix = function (reqId) {
+  function buildParams(prefix, obj, traditional, add) {
+    var name, i, v
+      , rbracket = /\[\]$/
+
+    if (isArray(obj)) {
+      // Serialize array item.
+      for (i = 0; obj && i < obj.length; i++) {
+        v = obj[i]
+        if (traditional || rbracket.test(prefix)) {
+          // Treat each array item as a scalar.
+          add(prefix, v)
+        } else {
+          buildParams(prefix + '[' + (typeof v === 'object' ? i : '') + ']', v, traditional, add)
+        }
+      }
+    } else if (obj.toString() === '[object Object]') {
+      // Serialize object item.
+      for (name in obj) {
+        buildParams(prefix + '[' + name + ']', obj[name], traditional, add)
+      }
+
+    } else {
+      // Serialize scalar item.
+      add(prefix, obj)
+    }
+  }
+
+  reqwest.getcallbackPrefix = function () {
     return callbackPrefix
   }
 
@@ -973,170 +1261,18 @@ module.exports = osmStream;
     return new Reqwest(o, fn)
   }
 
+  reqwest.ajaxSetup = function (options) {
+    options = options || {}
+    for (var k in options) {
+      globalSetupOptions[k] = options[k]
+    }
+  }
+
   return reqwest
 });
 
-},{}],10:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
-    }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            if (ev.source === window && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
-    }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
-
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-}
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-
-},{}],8:[function(require,module,exports){
-(function(process){var Stream = require('stream')
-
-// through
-//
-// a stream that does nothing but re-emit the input.
-// useful for aggregating a series of changing but not ending streams into one stream)
-
-
-
-exports = module.exports = through
-through.through = through
-
-//create a readable writable stream.
-
-function through (write, end) {
-  write = write || function (data) { this.queue(data) }
-  end = end || function () { this.queue(null) }
-
-  var ended = false, destroyed = false, buffer = []
-  var stream = new Stream()
-  stream.readable = stream.writable = true
-  stream.paused = false
-
-  stream.write = function (data) {
-    write.call(this, data)
-    return !stream.paused
-  }
-
-  function drain() {
-    while(buffer.length && !stream.paused) {
-      var data = buffer.shift()
-      if(null === data)
-        return stream.emit('end')
-      else
-        stream.emit('data', data)
-    }
-  }
-
-  stream.queue = stream.push = function (data) {
-    buffer.push(data)
-    drain()
-    return stream
-  }
-
-  //this will be registered as the first 'end' listener
-  //must call destroy next tick, to make sure we're after any
-  //stream piped from here.
-  //this is only a problem if end is not emitted synchronously.
-  //a nicer way to do this is to make sure this is the last listener for 'end'
-
-  stream.on('end', function () {
-    stream.readable = false
-    if(!stream.writable)
-      process.nextTick(function () {
-        stream.destroy()
-      })
-  })
-
-  function _end () {
-    stream.writable = false
-    end.call(stream)
-    if(!stream.readable)
-      stream.destroy()
-  }
-
-  stream.end = function (data) {
-    if(ended) return
-    ended = true
-    if(arguments.length) stream.write(data)
-    _end() // will emit or queue
-    return stream
-  }
-
-  stream.destroy = function () {
-    if(destroyed) return
-    destroyed = true
-    ended = true
-    buffer.length = 0
-    stream.writable = stream.readable = false
-    stream.emit('close')
-    return stream
-  }
-
-  stream.pause = function () {
-    if(stream.paused) return
-    stream.paused = true
-    stream.emit('pause')
-    return stream
-  }
-  stream.resume = function () {
-    if(stream.paused) {
-      stream.paused = false
-    }
-    drain()
-    //may have become paused again,
-    //as drain emits 'data'.
-    if(!stream.paused)
-      stream.emit('drain')
-    return stream
-  }
-  return stream
-}
-
-
-})(require("__browserify_process"))
-},{"stream":11,"__browserify_process":10}],9:[function(require,module,exports){
+})()
+},{}],9:[function(require,module,exports){
 
 /**
  * Object#toString() ref for stringify().
@@ -1246,6 +1382,7 @@ function parseString(str){
 
       // ?foo
       if ('' == key) key = pair, val = '';
+      if ('' == key) return ret;
 
       return merge(ret, decode(key), decode(val));
     }, { base: {} }).base;
@@ -1334,6 +1471,7 @@ function stringifyObject(obj, prefix) {
 
   for (var i = 0, len = keys.length; i < len; ++i) {
     key = keys[i];
+    if ('' == key) continue;
     if (null == obj[key]) {
       ret.push(encodeURIComponent(key) + '=');
     } else {
